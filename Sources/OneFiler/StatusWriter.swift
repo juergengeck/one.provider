@@ -17,7 +17,7 @@ actor StatusWriter {
     init() {
         // Get App Group container
         if let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.com.one.filer"
+            forSecurityApplicationGroupIdentifier: "group.one.filer"
         ) {
             statusFileURL = containerURL.appendingPathComponent("status.json")
             NSLog("✅ StatusWriter: Initialized with status file at \(containerURL.path)")

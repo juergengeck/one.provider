@@ -215,7 +215,7 @@ class MenuBarApp: NSObject, NSApplicationDelegate {
 
     @objc private func openLogs() {
         guard let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.com.one.filer"
+            forSecurityApplicationGroupIdentifier: "group.one.filer"
         ) else {
             return
         }

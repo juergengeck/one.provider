@@ -45,7 +45,7 @@ class StatusMonitor {
 
         // Get App Group container
         if let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.com.one.filer"
+            forSecurityApplicationGroupIdentifier: "group.one.filer"
         ) {
             statusFileURL = containerURL.appendingPathComponent("status.json")
         } else {

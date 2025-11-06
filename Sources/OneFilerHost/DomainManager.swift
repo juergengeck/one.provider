@@ -16,7 +16,7 @@ class DomainManager {
     init() {
         // Get App Group container
         containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.com.one.filer"
+            forSecurityApplicationGroupIdentifier: "group.one.filer"
         )
 
         if let containerURL = containerURL {

@@ -80,7 +80,7 @@ public struct ONEChanges {
 public actor ONEBridge {
 
     private let config: ONEInstanceConfig
-    private let logger = Logger(subsystem: "com.one.provider", category: "ONEBridge")
+    private let logger = Logger(subsystem: "one.filer", category: "ONEBridge")
     private let debugLogger: DebugLogger
     private var nodeProcess: Process?
     private var stdinPipe: Pipe?

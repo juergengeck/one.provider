@@ -15,7 +15,7 @@ public actor DebugLogger {
     ///   - appGroupIdentifier: App Group identifier
     ///   - maxLogSize: Maximum size in bytes before rotation (default: 1MB)
     ///   - maxLogFiles: Maximum number of rotated log files to keep (default: 5)
-    public init(component: String, appGroupIdentifier: String = "group.com.one.filer", maxLogSize: Int = 1_048_576, maxLogFiles: Int = 5) throws {
+    public init(component: String, appGroupIdentifier: String = "group.one.filer", maxLogSize: Int = 1_048_576, maxLogFiles: Int = 5) throws {
         guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
             throw DebugLoggerError.appGroupNotFound
         }

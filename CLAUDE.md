@@ -26,7 +26,7 @@ export ONE_PROVIDER_HTTP_PORT=3000
 ./scripts/rebuild-and-install.sh
 
 # Watch logs
-log stream --predicate 'subsystem == "com.one.provider"' --level debug
+log stream --predicate 'subsystem == "one.filer"' --level debug
 
 # Kill stuck processes
 killall fileproviderd && killall node
@@ -397,7 +397,7 @@ const inviteContent = fs.readFileSync(`${mountPoint}/invites/iop_invite.txt`, 'u
 
 4. **Logs** (read-only monitoring):
    ```bash
-   log stream --predicate 'subsystem == "com.one.provider"' --level debug
+   log stream --predicate 'subsystem == "one.filer"' --level debug
    ```
 
 ### Comparison to iCloud Drive
@@ -648,13 +648,13 @@ Error codes follow JSON-RPC 2.0 spec (-32700 to -32603) plus custom codes (-3200
      - After installing: `/Applications/OneFiler.app/Contents/MacOS/onefiler`
    - Can be called by any application or user
 
-2. **CLI writes to App Group container**: `group.com.one.filer/domains.json`
+2. **CLI writes to App Group container**: `group.one.filer/domains.json`
    ```json
    {
      "domain-identifier": "/path/to/instance"
    }
    ```
-   Container location: `~/Library/Group Containers/group.com.one.filer/`
+   Container location: `~/Library/Group Containers/group.one.filer/`
 
 3. **CLI calls `NSFileProviderManager.add()`** to register domain with macOS
 4. **macOS creates mount point**: `~/Library/CloudStorage/OneFiler-{domain-identifier}/`
@@ -666,8 +666,8 @@ Error codes follow JSON-RPC 2.0 spec (-32700 to -32603) plus custom codes (-3200
 ### App Group Container
 
 The extension communicates domain configuration via **App Group**:
-- **Identifier**: `group.com.one.filer` (configured in `project.yml`)
-- **Container location**: `~/Library/Group Containers/group.com.one.filer/`
+- **Identifier**: `group.one.filer` (configured in `project.yml`)
+- **Container location**: `~/Library/Group Containers/group.one.filer/`
 - **Config file**: `domains.json` in container root
 
 This allows the sandboxed extension to read domain mappings written by the CLI tool.
@@ -715,7 +715,7 @@ For most development work:
 
 # Then test
 ls ~/Library/CloudStorage/OneFiler-ONE-Test/
-log stream --predicate 'subsystem == "com.one.provider"' --level debug
+log stream --predicate 'subsystem == "one.filer"' --level debug
 ```
 
 This is the recommended approach as it ensures:
@@ -809,7 +809,7 @@ npm run test:connection
 
 ```bash
 # Real-time logs (recommended - ONEBridge uses com.one.provider subsystem)
-log stream --predicate 'subsystem == "com.one.provider"' --level debug
+log stream --predicate 'subsystem == "one.filer"' --level debug
 
 # Include File Provider daemon logs
 log stream --predicate 'subsystem CONTAINS "FileProvider"' --level debug
@@ -818,7 +818,7 @@ log stream --predicate 'subsystem CONTAINS "FileProvider"' --level debug
 log stream --predicate 'subsystem CONTAINS "one"' --level debug
 
 # Console.app (GUI)
-open -a Console  # Filter by "com.one.provider"
+open -a Console  # Filter by "one.filer"
 ```
 
 ### Check Extension Status
@@ -827,8 +827,8 @@ open -a Console  # Filter by "com.one.provider"
 # List all File Provider extensions
 pluginkit -m -v -p com.apple.fileprovider-nonui
 
-# Check if OneFiler is registered (bundle ID: com.one.filer.extension)
-pluginkit -m | grep com.one.filer
+# Check if OneFiler is registered (bundle ID: one.filer.extension)
+pluginkit -m | grep one.filer
 
 # View registered domains
 /Applications/OneFiler.app/Contents/MacOS/onefiler list
@@ -845,7 +845,7 @@ pluginkit -m | grep com.one.filer
 **"Server unreachable"**
 - Node.js not in PATH for sandboxed extension
 - Node.js process failed to spawn
-- Check logs: `log show --predicate 'subsystem == "com.one.provider"' --last 5m`
+- Check logs: `log show --predicate 'subsystem == "one.filer"' --last 5m`
 
 **"Failed to read domain configuration"**
 - Domain not registered via CLI tool
@@ -890,9 +890,9 @@ killall node
 
 Code signing is configured in `project.yml` (XcodeGen):
 - **Bundle IDs**:
-  - Host app: `com.one.filer`
-  - Extension: `com.one.filer.extension`
-- **App Groups**: `group.com.one.filer`
+  - Host app: `one.filer`
+  - Extension: `one.filer.extension`
+- **App Groups**: `group.one.filer`
 - **Development Team**: Set in `project.yml` `settings.DEVELOPMENT_TEAM`
 
 ### Development (Automatic Signing via Xcode)
@@ -935,7 +935,7 @@ The `create-app-bundle.sh` script uses **ad-hoc signing** by default:
 
 Configured in `project.yml` and `Resources/*.entitlements`:
 - **App Sandbox**: `com.apple.security.app-sandbox`
-- **App Groups**: `group.com.one.filer`
+- **App Groups**: `group.one.filer`
 - **File Provider**: `com.apple.security.files.user-selected.read-write` (extension only)
 - **Network Client**: `com.apple.security.network.client` (allows Node.js to connect to CommServer)
 

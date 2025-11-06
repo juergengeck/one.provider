@@ -7,7 +7,7 @@ class RootEnumerator: NSObject, NSFileProviderEnumerator {
 
     private weak var fileProviderExtension: FileProviderExtension?
     private var currentAnchor: Data?
-    private let logger = Logger(subsystem: "com.one.provider", category: "RootEnum")
+    private let logger = Logger(subsystem: "one.filer", category: "RootEnum")
 
     init(extension: FileProviderExtension) {
         self.fileProviderExtension = `extension`
@@ -112,7 +112,7 @@ class GenericEnumerator: NSObject, NSFileProviderEnumerator {
 
     private weak var fileProviderExtension: FileProviderExtension?
     private let containerIdentifier: NSFileProviderItemIdentifier
-    private let logger = Logger(subsystem: "com.one.provider", category: "GenericEnum")
+    private let logger = Logger(subsystem: "one.filer", category: "GenericEnum")
 
     init(extension: FileProviderExtension, containerIdentifier: NSFileProviderItemIdentifier) {
         self.fileProviderExtension = `extension`

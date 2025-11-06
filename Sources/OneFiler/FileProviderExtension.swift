@@ -10,7 +10,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
     private var bridge: ONEBridge?
     private var bridgeTask: Task<ONEBridge, Error>?
     private let bridgeLock = NSLock()
-    private let logger = Logger(subsystem: "com.one.provider", category: "Extension")
+    private let logger = Logger(subsystem: "one.filer", category: "Extension")
     private let debugLogger: DebugLogger
     private let statusWriter = StatusWriter()
 
@@ -55,7 +55,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
     private func setupBridge() async throws -> ONEBridge {
         await debugLogger.info("=== Setup Bridge Started ===")
 
-        guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.one.filer") else {
+        guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.one.filer") else {
             NSLog("OneFiler: Failed to get App Group container URL")
             await debugLogger.critical("Failed to get App Group container URL")
             throw NSFileProviderError(.serverUnreachable)

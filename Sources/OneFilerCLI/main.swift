@@ -396,7 +396,7 @@ enum OneFilerCLI {
     static func getContainerPath() -> URL? {
         let fileManager = FileManager.default
         let containerURL = fileManager
-            .containerURL(forSecurityApplicationGroupIdentifier: "group.com.one.filer")
+            .containerURL(forSecurityApplicationGroupIdentifier: "group.one.filer")
         return containerURL
     }
 

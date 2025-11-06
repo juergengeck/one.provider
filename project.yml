@@ -1,6 +1,6 @@
 name: OneFiler
 options:
-  bundleIdPrefix: com.one.filer
+  bundleIdPrefix: one.filer
   deploymentTarget:
     macOS: "13.0"
   developmentLanguage: en
@@ -34,7 +34,7 @@ targets:
         type: folder
         buildPhase: resources
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.one.filer
+      PRODUCT_BUNDLE_IDENTIFIER: one.filer
       INFOPLIST_FILE: Resources/Info.plist
       COMBINE_HIDPI_IMAGES: YES
       CODE_SIGN_ENTITLEMENTS: Resources/OneFiler.entitlements
@@ -43,7 +43,7 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.application-groups:
-          - group.com.one.filer
+          - group.one.filer
         com.apple.security.network.client: true
     dependencies:
       - target: OneFilerExtension
@@ -82,7 +82,7 @@ targets:
         type: folder
         buildPhase: resources
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.one.filer.extension
+      PRODUCT_BUNDLE_IDENTIFIER: one.filer.extension
       INFOPLIST_FILE: Resources/ExtensionInfo.plist
       COMBINE_HIDPI_IMAGES: YES
       SKIP_INSTALL: NO
@@ -92,7 +92,7 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.application-groups:
-          - group.com.one.filer
+          - group.one.filer
         com.apple.security.files.user-selected.read-write: true
         com.apple.security.network.client: true
     dependencies: []
