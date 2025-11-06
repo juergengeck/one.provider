@@ -30,6 +30,9 @@ targets:
     deploymentTarget: "13.0"
     sources:
       - path: Sources/OneFilerHost
+      - path: Resources/Assets.xcassets
+        type: folder
+        buildPhase: resources
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.one.filer
       INFOPLIST_FILE: Resources/Info.plist

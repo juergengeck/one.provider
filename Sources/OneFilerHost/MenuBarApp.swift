@@ -13,7 +13,18 @@ class MenuBarApp: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "externaldrive.fill", accessibilityDescription: "OneFiler")
+            // Load custom icon from bundle
+            if let iconImage = NSImage(named: "MenuBarIcon") {
+                iconImage.isTemplate = true  // Enable template rendering for dark/light mode
+                button.image = iconImage
+            } else if let iconPath = Bundle.main.path(forResource: "MenuBarIcon", ofType: "png"),
+                      let iconImage = NSImage(contentsOfFile: iconPath) {
+                iconImage.isTemplate = true
+                button.image = iconImage
+            } else {
+                // Fallback to SF Symbol
+                button.image = NSImage(systemSymbolName: "person.fill", accessibilityDescription: "OneFiler")
+            }
             button.toolTip = "OneFiler - ONE Platform File Provider"
         }
 
@@ -222,15 +233,30 @@ class MenuBarApp: NSObject, NSApplicationDelegate {
     private func updateIcon(state: StatusMonitor.ConnectionState) {
         guard let button = statusItem.button else { return }
 
+        // For now, use the same icon for all states
+        // In the future, we could create variations with badges/overlays
+        // The base flexibel icon will adjust to dark/light mode automatically since it's a template
+
+        // Load the icon (same for all states for now)
+        if let iconImage = NSImage(named: "MenuBarIcon") {
+            iconImage.isTemplate = true
+            button.image = iconImage
+        } else if let iconPath = Bundle.main.path(forResource: "MenuBarIcon", ofType: "png"),
+                  let iconImage = NSImage(contentsOfFile: iconPath) {
+            iconImage.isTemplate = true
+            button.image = iconImage
+        }
+
+        // Update tooltip to reflect state
         switch state {
         case .connected:
-            button.image = NSImage(systemSymbolName: "externaldrive.fill", accessibilityDescription: "OneFiler - Connected")
+            button.toolTip = "OneFiler - Connected"
         case .disconnected:
-            button.image = NSImage(systemSymbolName: "externaldrive", accessibilityDescription: "OneFiler - Disconnected")
+            button.toolTip = "OneFiler - Disconnected"
         case .syncing:
-            button.image = NSImage(systemSymbolName: "externaldrive.fill.badge.timemachine", accessibilityDescription: "OneFiler - Syncing")
+            button.toolTip = "OneFiler - Syncing"
         case .error:
-            button.image = NSImage(systemSymbolName: "externaldrive.badge.exclamationmark", accessibilityDescription: "OneFiler - Error")
+            button.toolTip = "OneFiler - Error"
         }
     }
 }
