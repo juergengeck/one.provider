@@ -13,17 +13,10 @@ class MenuBarApp: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem.button {
-            // Load custom icon from bundle
-            if let iconImage = NSImage(named: "MenuBarIcon") {
-                iconImage.isTemplate = true  // Enable template rendering for dark/light mode
+            // Temporarily use SF Symbol to test
+            if let iconImage = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "OneFiler") {
                 button.image = iconImage
-            } else if let iconPath = Bundle.main.path(forResource: "MenuBarIcon", ofType: "png"),
-                      let iconImage = NSImage(contentsOfFile: iconPath) {
-                iconImage.isTemplate = true
-                button.image = iconImage
-            } else {
-                // Fallback to SF Symbol
-                button.image = NSImage(systemSymbolName: "person.fill", accessibilityDescription: "OneFiler")
+                NSLog("OneFiler: Using SF Symbol")
             }
             button.toolTip = "OneFiler - ONE Platform File Provider"
         }
@@ -42,8 +35,8 @@ class MenuBarApp: NSObject, NSApplicationDelegate {
         // Assign menu to status item
         statusItem.menu = menu
 
-        // Start monitoring
-        statusMonitor.startMonitoring()
+        // DISABLED: Start monitoring (causes permission dialog loop)
+        // statusMonitor.startMonitoring()
 
         NSLog("OneFiler menu bar app started")
     }
@@ -238,12 +231,10 @@ class MenuBarApp: NSObject, NSApplicationDelegate {
         // The base flexibel icon will adjust to dark/light mode automatically since it's a template
 
         // Load the icon (same for all states for now)
-        if let iconImage = NSImage(named: "MenuBarIcon") {
+        if let iconPath = Bundle.main.path(forResource: "MenuBarIcon", ofType: "png"),
+           let iconImage = NSImage(contentsOfFile: iconPath) {
             iconImage.isTemplate = true
-            button.image = iconImage
-        } else if let iconPath = Bundle.main.path(forResource: "MenuBarIcon", ofType: "png"),
-                  let iconImage = NSImage(contentsOfFile: iconPath) {
-            iconImage.isTemplate = true
+            iconImage.size = NSSize(width: 18, height: 18)
             button.image = iconImage
         }
 

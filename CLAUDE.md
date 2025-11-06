@@ -21,7 +21,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Full rebuild and install (recommended for most changes)
 ./scripts/rebuild-and-install.sh
 
-# Enable HTTP REST API (optional)
+# Launch from DerivedData (for development/testing without installing)
+open ~/Library/Developer/Xcode/DerivedData/OneFiler-*/Build/Products/Debug/OneFilerHost.app
+
+# Enable HTTP REST API (optional, disabled by default)
 export ONE_PROVIDER_HTTP_PORT=3000
 ./scripts/rebuild-and-install.sh
 
@@ -29,7 +32,7 @@ export ONE_PROVIDER_HTTP_PORT=3000
 log stream --predicate 'subsystem == "one.filer"' --level debug
 
 # Kill stuck processes
-killall fileproviderd && killall node
+killall OneFilerHost && killall fileproviderd && killall node
 
 # Test IPC (fast, no installation needed)
 npm run test:ipc
@@ -639,6 +642,58 @@ All methods map directly to IFileSystem interface:
 
 Error codes follow JSON-RPC 2.0 spec (-32700 to -32603) plus custom codes (-32000 to -32004).
 
+### Full IoM (Internet of Me) Configuration
+
+one.provider is configured for **full IoM mode**, enabling complete incremental backup of peer data:
+
+**Configuration** (`node-runtime/index.ts`):
+- **IoM Mode**: `'full'` - Complete data replication (vs `'light'` which only establishes identity/communication)
+- **PairingFileSystem**: Initialized with `'full'` mode for full backup capability
+- **ConnectionsModel**:
+  - `acceptIncomingConnections: true` - Accepts connections via CommServer relay
+  - `establishOutgoingConnections: true` - Can initiate connections
+  - `allowPairing: true` - Enables invite-based pairing
+  - `noImport: false` - Import enabled (receives all peer data)
+  - `noExport: false` - Export enabled (shares data with peers)
+- **IoMManager**: Properly initialized with LeuteModel and CommServer URL
+- **Filesystems mounted**: `/chats`, `/invites`, `/objects`, `/profiles`, `/questionnaires`, `/types`, `/debug`
+
+**What this means**: When paired with another ONE instance via full IoM invitation, one.provider becomes a complete incremental backup, replicating all data from all channels of the peer.
+
+**Note**: `/journal` filesystem is not currently mounted (JournalModel may change).
+
+### App Group Configuration
+
+**CRITICAL**: The app group identifier is **`group.one.filer`** (not `group.com.one.filer`).
+
+**Container Location**: `~/Library/Group Containers/group.one.filer/`
+
+**Configuration Files**:
+- `domains.json` - Domain name to instance path mapping
+- `status.json` - Domain connection status (written by extension)
+- `logs/` - Debug logs directory
+
+**Entitlements**:
+- `Resources/OneFiler.entitlements` - Host app entitlements
+- `Resources/Extension.entitlements` - Extension entitlements
+
+Both must specify `group.one.filer` in `com.apple.security.application-groups` array.
+
+**Known Issue**: An old `OneFilerExtension.entitlements` file with incorrect app group was removed. Always use files in `Resources/` directory.
+
+### Status Monitoring
+
+**Current State**: Status monitoring is **disabled** to avoid permission dialog loop.
+
+The StatusMonitor polls App Group container every 2 seconds, which triggered macOS permission dialogs repeatedly. This has been temporarily disabled in `MenuBarApp.swift`:
+
+```swift
+// DISABLED: Start monitoring (causes permission dialog loop)
+// statusMonitor.startMonitoring()
+```
+
+**To Re-enable**: Fix the permission check to only access container after initial permission is granted, then uncomment the line.
+
 ### Domain Registration Flow
 
 1. **Application or user calls CLI tool** (`onefiler register --name NAME --path PATH`)
@@ -1046,6 +1101,50 @@ one.provider/
 └── tsconfig.json                      # TypeScript config
 ```
 
+## Distribution
+
+For distributing one.provider to users, see **DISTRIBUTION.md** for the complete guide.
+
+### Quick Distribution Build
+
+```bash
+# Prerequisites:
+# 1. Apple Developer Account with Developer ID certificate installed
+# 2. Notarization credentials configured
+
+# Set up credentials
+export NOTARIZATION_APPLE_ID="your@apple.id"
+export NOTARIZATION_PASSWORD="app-specific-password"
+
+# Build signed, notarized package
+./scripts/build-distribution.sh
+```
+
+**Output:**
+- `dist/OneFiler-1.0.0.dmg` - Disk image for drag-and-drop installation
+- `dist/OneFiler-1.0.0.pkg` - Package installer
+
+### Distribution Requirements
+
+- ✅ **Developer ID Application certificate** (not Apple Development)
+- ✅ **Hardened Runtime** enabled
+- ✅ **Code signed** with timestamp
+- ✅ **Notarized** by Apple
+- ✅ **Stapled** notarization ticket
+- ✅ All bundled binaries signed (Node.js, CLI, extension)
+
+### Key Differences from Development Build
+
+| Aspect | Development | Distribution |
+|--------|-------------|--------------|
+| Certificate | Apple Development | Developer ID Application |
+| Hardened Runtime | Optional | Required |
+| Notarization | Not required | Required for macOS 10.15+ |
+| Installation | Manual copy | DMG or PKG installer |
+| Gatekeeper | May show warnings | No warnings |
+
+See DISTRIBUTION.md for detailed instructions, troubleshooting, and security considerations.
+
 ## References
 
 - **IFileSystem interface**: `one.models/src/fileSystems/IFileSystem.ts`
@@ -1053,3 +1152,4 @@ one.provider/
 - **XcodeGen docs**: https://github.com/yonaskolb/XcodeGen
 - **Specification**: `specs/001-apple-file-provider/`
 - **Status docs**: STATUS.md, INTEGRATION.md, NEXT_STEPS.md (historical context)
+- **Distribution**: DISTRIBUTION.md (signing, notarization, packaging)

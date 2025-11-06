@@ -33,6 +33,8 @@ targets:
       - path: Resources/Assets.xcassets
         type: folder
         buildPhase: resources
+      - path: Resources/MenuBarIcon.png
+        buildPhase: resources
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: one.filer
       INFOPLIST_FILE: Resources/Info.plist

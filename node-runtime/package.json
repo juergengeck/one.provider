@@ -9,7 +9,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rm -rf lib",
-    "vendor:install": "mkdir -p node_modules/@refinio && cd node_modules/@refinio && tar -xzf ../../../vendor/refinio-one.core-*.tgz && mv package one.core && tar -xzf ../../../vendor/refinio-one.models-*.tgz && mv package one.models"
+    "vendor:install": "rm -rf node_modules/@refinio && mkdir -p node_modules/@refinio && cd node_modules/@refinio && tar -xzf ../../../vendor/refinio-one.core-*.tgz && mv package one.core && tar -xzf ../../../vendor/refinio-one.models-*.tgz && mv package one.models"
   },
   "dependencies": {
     "@refinio/one.core": "0.6.1-beta-3",
