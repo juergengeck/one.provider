@@ -14,6 +14,7 @@ import {createInterface} from 'readline';
 import type {IFileSystem} from '@refinio/one.models/lib/fileSystems/IFileSystem.js';
 import {ConnectionHandler} from './connection-handler.js';
 import {HttpRestServer} from './http-server.js';
+import {DebugLogger} from './debug-logger.js';
 
 // JSON-RPC 2.0 types
 interface JSONRPCRequest {
@@ -60,6 +61,7 @@ class IPCBridge {
     private leuteModel: any = null;
     private instancePath: string | null = null;
     private connectionsModel: any = null;
+    private readonly debugLogger: DebugLogger;
     private readonly readline = createInterface({
         input: process.stdin,
         output: process.stdout,
@@ -67,75 +69,60 @@ class IPCBridge {
     });
 
     constructor() {
-        // Early logging to App Group container (sandbox-accessible)
-        try {
-            const fs = require('fs');
-            const path = require('path');
-            const os = require('os');
-            const logPath = path.join(os.homedir(), 'Library/Group Containers/group.com.one.filer/ipc-debug.log');
-            const msg = `[${new Date().toISOString()}] IPC Bridge starting...\nNode: ${process.version}\nPlatform: ${process.platform}\nCWD: ${process.cwd()}\n`;
-            fs.appendFileSync(logPath, msg);
-        } catch (e) {
-            // If that fails, try /tmp
-            try {
-                const fs = require('fs');
-                const msg = `[${new Date().toISOString()}] IPC Bridge starting (fallback to /tmp)...\nError writing to App Group: ${e}\n`;
-                fs.appendFileSync('/tmp/one-provider-debug.log', msg);
-            } catch (e2) { /* give up */ }
-        }
+        // Initialize debug logger first
+        this.debugLogger = new DebugLogger('ipc');
 
+        this.debugLogger.info('=== IPC Bridge Starting ===');
+        this.debugLogger.info(`Node version: ${process.version}`);
+        this.debugLogger.info(`Platform: ${process.platform}`);
+        this.debugLogger.info(`CWD: ${process.cwd()}`);
+        this.debugLogger.info(`Process ID: ${process.pid}`);
+
+        // Keep console.error for stderr capture by Swift
         console.error('[IPC] Starting IPC Bridge...');
         console.error('[IPC] Node version:', process.version);
         console.error('[IPC] Platform:', process.platform);
         console.error('[IPC] CWD:', process.cwd());
+
         this.readline.on('line', (line) => this.handleMessage(line));
         process.on('SIGTERM', () => this.shutdown());
         process.on('SIGINT', () => this.shutdown());
+
         console.error('[IPC] IPC Bridge ready, waiting for messages...');
-    }
-
-    /**
-     * Write debug log to instance directory (to avoid macOS privacy redaction)
-     */
-    private debugLog(message: string): void {
-        if (!this.instancePath) return;
-
-        try {
-            const fs = require('fs');
-            const path = require('path');
-            const logFile = path.join(this.instancePath, 'ipc-debug.log');
-            const timestamp = new Date().toISOString();
-            fs.appendFileSync(logFile, `[${timestamp}] ${message}\n`);
-        } catch (error) {
-            // Silently fail if logging doesn't work
-        }
+        this.debugLogger.info('IPC Bridge ready, waiting for messages...');
     }
 
     /**
      * Handle incoming JSON-RPC message
      */
     private async handleMessage(line: string): Promise<void> {
+        this.debugLogger.debug(`← Received message, length: ${line.length}`);
         console.error('[IPC] Received message, length:', line.length);
         let request: any;
 
         try {
             request = JSON.parse(line);
+            this.debugLogger.debug(`← Parsed request: method=${request.method}, id=${request.id}`);
             console.error('[IPC] Parsed request, method:', request.method, 'id:', request.id);
         } catch (error) {
             console.error('[IPC] Parse error:', error);
+            this.debugLogger.error(`Parse error: ${error}`);
             this.sendError(null, ErrorCodes.PARSE_ERROR, 'Parse error', error);
             return;
         }
 
         if (!this.isValidRequest(request)) {
             console.error('[IPC] Invalid request');
+            this.debugLogger.error('Invalid request structure');
             this.sendError(request.id ?? null, ErrorCodes.INVALID_REQUEST, 'Invalid Request');
             return;
         }
 
         try {
+            this.debugLogger.info(`→ Dispatching: ${request.method} (id: ${request.id})`);
             console.error('[IPC] Dispatching method:', request.method);
             const result = await this.dispatch(request.method, request.params);
+            this.debugLogger.info(`✓ Completed: ${request.method} (id: ${request.id})`);
             console.error('[IPC] Method', request.method, 'completed successfully');
             this.sendResponse(request.id!, result);
         } catch (error: any) {
@@ -143,15 +130,10 @@ class IPCBridge {
             const message = error.message ?? 'Internal error';
             console.error('[IPC] Method', request.method, 'failed:', message);
 
-            // Log error to App Group container for debugging (macOS redacts stderr)
-            try {
-                const fs = require('fs');
-                const path = require('path');
-                const os = require('os');
-                const logPath = path.join(os.homedir(), 'Library/Group Containers/group.com.one.filer/ipc-debug.log');
-                const errorMsg = `[${new Date().toISOString()}] Method ${request.method} failed:\n  Code: ${code}\n  Message: ${message}\n  Stack: ${error.stack}\n  Full error: ${JSON.stringify(error, null, 2)}\n\n`;
-                fs.appendFileSync(logPath, errorMsg);
-            } catch (e) { /* ignore */ }
+            this.debugLogger.error(`✗ Failed: ${request.method} (id: ${request.id})`);
+            this.debugLogger.error(`  Code: ${code}`);
+            this.debugLogger.error(`  Message: ${message}`);
+            this.debugLogger.error(`  Stack: ${error.stack || 'No stack trace'}`);
 
             this.sendError(request.id ?? null, code, message, error);
         }
@@ -218,13 +200,16 @@ class IPCBridge {
         secret?: string;
         name?: string;
     }): Promise<{status: 'ok'}> {
+        this.debugLogger.info('=== Initialize Started ===');
+
         if (!params?.instancePath) {
+            this.debugLogger.error('Initialize failed: instancePath is required');
             throw {code: ErrorCodes.INVALID_PARAMS, message: 'instancePath is required'};
         }
 
-        // Store instance path for debug logging
+        // Store instance path
         this.instancePath = params.instancePath;
-        this.debugLog(`Initializing ONE instance at: ${params.instancePath}`);
+        this.debugLogger.info(`Instance path: ${params.instancePath}`);
 
         // Use provided credentials or fall back to environment variables
         const email = params.email || process.env.REFINIO_INSTANCE_EMAIL || 'fileprovider@local';
@@ -255,6 +240,10 @@ class IPCBridge {
         const reverseMaps = new Map([...ReverseMapsStable, ...ReverseMapsExperimental]);
         const reverseMapsForIdObjects = new Map([...ReverseMapsForIdObjectsStable, ...ReverseMapsForIdObjectsExperimental]);
 
+        this.debugLogger.info('Initializing ONE.core instance...');
+        this.debugLogger.debug(`  Name: ${name}`);
+        this.debugLogger.debug(`  Email: ${email}`);
+
         // Initialize ONE.core instance (connect to existing instance with matching credentials)
         await initInstance({
             name,
@@ -269,7 +258,10 @@ class IPCBridge {
             wipeStorage: false
         });
 
+        this.debugLogger.info('ONE.core instance initialized');
+
         // Initialize models (same pattern as refinio.api)
+        this.debugLogger.info('Importing models...');
         const {LeuteModel, ChannelManager, ConnectionsModel} = await import('@refinio/one.models/lib/models/index.js');
         const {default: TopicModel} = await import('@refinio/one.models/lib/models/Chat/TopicModel.js');
         const {default: Notifications} = await import('@refinio/one.models/lib/models/Notifications.js');
@@ -299,18 +291,27 @@ class IPCBridge {
         });
 
         // Initialize all models
+        this.debugLogger.info('Initializing models...');
         await leuteModel.init();
+        this.debugLogger.debug('  LeuteModel initialized');
         await channelManager.init();
+        this.debugLogger.debug('  ChannelManager initialized');
         await topicModel.init();
+        this.debugLogger.debug('  TopicModel initialized');
         await iomManager.init();
+        this.debugLogger.debug('  IoMManager initialized');
         await questionnaireModel.init();
+        this.debugLogger.debug('  QuestionnaireModel initialized');
         await connectionsModel.init();
+        this.debugLogger.debug('  ConnectionsModel initialized');
+        this.debugLogger.info('All models initialized');
 
         // Store models for HTTP server
         this.leuteModel = leuteModel;
         this.connectionsModel = connectionsModel;
 
         // Create complete filesystem (copied from refinio.api/src/filer/createFilerWithPairing.ts)
+        this.debugLogger.info('Creating filesystems...');
         const {default: TemporaryFileSystem} = await import('@refinio/one.models/lib/fileSystems/TemporaryFileSystem.js');
         const {default: ChatFileSystem} = await import('@refinio/one.models/lib/fileSystems/ChatFileSystem.js');
         const {default: DebugFileSystem} = await import('@refinio/one.models/lib/fileSystems/DebugFileSystem.js');
@@ -331,6 +332,7 @@ class IPCBridge {
 
         const rootFileSystem = new TemporaryFileSystem();
         console.error('[IPC] Mounting filesystems...');
+        this.debugLogger.info('Mounting filesystems...');
         await rootFileSystem.mountFileSystem('/chats', chatFileSystem);
         await rootFileSystem.mountFileSystem('/debug', debugFileSystem);
         await rootFileSystem.mountFileSystem('/invites', pairingFileSystem);
@@ -339,6 +341,7 @@ class IPCBridge {
         await rootFileSystem.mountFileSystem('/profiles', profilesFileSystem);
         await rootFileSystem.mountFileSystem('/questionnaires', questionnairesFileSystem);
         console.error('[IPC] All filesystems mounted: /chats, /debug, /invites, /objects, /types, /profiles, /questionnaires');
+        this.debugLogger.info('All filesystems mounted: /chats, /debug, /invites, /objects, /types, /profiles, /questionnaires');
 
         this.fileSystem = rootFileSystem;
 
@@ -408,9 +411,11 @@ class IPCBridge {
             }
         } catch (error) {
             console.error(`[IPC] ❌ ERROR: Failed to validate invite: ${error}`);
+            this.debugLogger.error(`Failed to validate invite: ${error}`);
             throw new Error(`Invite validation failed: ${error}`);
         }
 
+        this.debugLogger.info('=== Initialize Completed Successfully ===');
         return {status: 'ok'};
     }
 
@@ -436,12 +441,12 @@ class IPCBridge {
             throw {code: ErrorCodes.INVALID_PARAMS, message: 'path is required'};
         }
 
-        this.debugLog(`readDir called with path: "${params.path}"`);
+        this.debugLogger.debug(`readDir called with path: "${params.path}"`);
 
         const result = await this.fileSystem!.readDir(params.path);
 
-        this.debugLog(`readDir result for "${params.path}": ${result.children.length} children`);
-        this.debugLog(`readDir children: ${JSON.stringify(result.children)}`);
+        this.debugLogger.debug(`readDir result for "${params.path}": ${result.children.length} children`);
+        this.debugLogger.debug(`readDir children: ${JSON.stringify(result.children)}`);
 
         return {children: result.children};
     }
@@ -600,19 +605,26 @@ class IPCBridge {
      */
     private async shutdown(): Promise<void> {
         console.error('[IPC] Shutting down...');
+        this.debugLogger.info('=== Shutdown Started ===');
 
         // Stop HTTP server if running
         if (this.httpServer) {
             try {
+                this.debugLogger.info('Stopping HTTP server...');
                 await this.httpServer.stop();
+                this.debugLogger.info('HTTP server stopped');
             } catch (error) {
                 console.error('[IPC] Error stopping HTTP server:', error);
+                this.debugLogger.error(`Error stopping HTTP server: ${error}`);
             }
         }
 
         // Close ONE instance
+        this.debugLogger.info('Closing ONE instance...');
         await closeInstance();
+        this.debugLogger.info('ONE instance closed');
         this.readline.close();
+        this.debugLogger.info('=== Shutdown Completed ===');
         process.exit(0);
     }
 }

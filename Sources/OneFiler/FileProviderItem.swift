@@ -22,24 +22,12 @@ class FileProviderItem: NSObject, NSFileProviderItem {
         return FileProviderItem(oneObject: rootObject)
     }
     
-    // Create standard folder items
+    // Create standard folder items (must match Node.js mounted filesystems)
     static func standardFolders() -> [FileProviderItem] {
         return [
             FileProviderItem(oneObject: ONEObject(
-                id: "objects",
-                name: "Objects",
-                type: .folder,
-                parentId: NSFileProviderItemIdentifier.rootContainer.rawValue
-            )),
-            FileProviderItem(oneObject: ONEObject(
                 id: "chats",
                 name: "Chats",
-                type: .folder,
-                parentId: NSFileProviderItemIdentifier.rootContainer.rawValue
-            )),
-            FileProviderItem(oneObject: ONEObject(
-                id: "types",
-                name: "Types",
                 type: .folder,
                 parentId: NSFileProviderItemIdentifier.rootContainer.rawValue
             )),
@@ -52,6 +40,30 @@ class FileProviderItem: NSObject, NSFileProviderItem {
             FileProviderItem(oneObject: ONEObject(
                 id: "invites",
                 name: "Invites",
+                type: .folder,
+                parentId: NSFileProviderItemIdentifier.rootContainer.rawValue
+            )),
+            FileProviderItem(oneObject: ONEObject(
+                id: "objects",
+                name: "Objects",
+                type: .folder,
+                parentId: NSFileProviderItemIdentifier.rootContainer.rawValue
+            )),
+            FileProviderItem(oneObject: ONEObject(
+                id: "profiles",
+                name: "Profiles",
+                type: .folder,
+                parentId: NSFileProviderItemIdentifier.rootContainer.rawValue
+            )),
+            FileProviderItem(oneObject: ONEObject(
+                id: "questionnaires",
+                name: "Questionnaires",
+                type: .folder,
+                parentId: NSFileProviderItemIdentifier.rootContainer.rawValue
+            )),
+            FileProviderItem(oneObject: ONEObject(
+                id: "types",
+                name: "Types",
                 type: .folder,
                 parentId: NSFileProviderItemIdentifier.rootContainer.rawValue
             ))
@@ -120,10 +132,15 @@ class FileProviderItem: NSObject, NSFileProviderItem {
     }
     
     var itemVersion: NSFileProviderItemVersion {
-        // Use content and metadata hashes for versioning
-        let contentData = oneObject.contentHash.data(using: .utf8) ?? Data()
-        let metadataData = oneObject.metadataHash.data(using: .utf8) ?? Data()
-        
+        // Generate version data from item properties
+        // For content version, use combination of id + size + modification date
+        let contentString = "\(oneObject.id):\(oneObject.size):\(oneObject.modified.timeIntervalSince1970)"
+        let contentData = contentString.data(using: .utf8) ?? Data()
+
+        // For metadata version, use id + name
+        let metadataString = "\(oneObject.id):\(oneObject.name)"
+        let metadataData = metadataString.data(using: .utf8) ?? Data()
+
         return NSFileProviderItemVersion(
             contentVersion: contentData,
             metadataVersion: metadataData
@@ -214,26 +231,38 @@ class FileProviderItem: NSObject, NSFileProviderItem {
         oneObject.thumbnail
     }
     
-    // MARK: - Custom Properties
-    
-    var isDownloaded: Bool {
-        // For now, assume all items are available
-        // In future, implement proper placeholder/download tracking
-        true
+    // MARK: - Content State (Modern API)
+
+    /// Content policy determines when the system should download the item
+    @available(macOS 12.0, *)
+    var contentPolicy: NSFileProviderContentPolicy {
+        if oneObject.type == .folder {
+            return .downloadLazily  // Folders don't have content to download
+        }
+        // For files, allow eager downloading (download on first access)
+        return .downloadEagerlyAndKeepDownloaded
     }
-    
+
+    // MARK: - Download State
+
+    var isDownloaded: Bool {
+        // Since we generate content on-demand via fetchContents,
+        // report files as always downloaded
+        oneObject.type == .folder ? true : true
+    }
+
     var isDownloading: Bool {
         false
     }
-    
+
     var uploadingError: Error? {
         nil
     }
-    
+
     var downloadingError: Error? {
         nil
     }
-    
+
     var isMostRecentVersionDownloaded: Bool {
         true
     }

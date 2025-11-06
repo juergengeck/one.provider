@@ -11,12 +11,29 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
     private var bridgeTask: Task<ONEBridge, Error>?
     private let bridgeLock = NSLock()
     private let logger = Logger(subsystem: "com.one.provider", category: "Extension")
+    private let debugLogger: DebugLogger
 
     required init(domain: NSFileProviderDomain) {
         logger.info("🚀 EXTENSION INIT: domain=\(domain.displayName)")
         NSLog("OneFiler Extension: init() called for domain: \(domain.displayName)")
         self.domain = domain
+
+        // Initialize debug logger (must succeed or throw)
+        do {
+            self.debugLogger = try DebugLogger(component: "extension")
+        } catch {
+            NSLog("OneFiler Extension: FATAL - Failed to initialize debug logger: \(error)")
+            fatalError("Failed to initialize debug logger: \(error)")
+        }
+
         super.init()
+
+        Task {
+            await debugLogger.info("=== Extension Initialized ===")
+            await debugLogger.info("Domain: \(domain.displayName)")
+            await debugLogger.info("Domain identifier: \(domain.identifier.rawValue)")
+        }
+
         logger.info("✅ EXTENSION INIT COMPLETE")
         NSLog("OneFiler Extension: init() completed - bridge will initialize on first use")
     }
@@ -29,29 +46,40 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
     }
 
     private func setupBridge() async throws -> ONEBridge {
+        await debugLogger.info("=== Setup Bridge Started ===")
+
         guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.one.filer") else {
             NSLog("OneFiler: Failed to get App Group container URL")
+            await debugLogger.critical("Failed to get App Group container URL")
             throw NSFileProviderError(.serverUnreachable)
         }
+
+        await debugLogger.debug("App Group container: \(containerURL.path)")
 
         let configURL = containerURL.appendingPathComponent("domains.json")
 
         guard FileManager.default.fileExists(atPath: configURL.path) else {
             NSLog("OneFiler: domains.json not found at \(configURL.path)")
+            await debugLogger.error("domains.json not found at \(configURL.path)")
             throw NSFileProviderError(.serverUnreachable)
         }
 
         let data = try Data(contentsOf: configURL)
         let allConfigs = try JSONDecoder().decode([String: DomainConfig].self, from: data)
 
+        await debugLogger.debug("Found \(allConfigs.count) domain configs")
+
         guard let domainConfig = allConfigs[domain.identifier.rawValue] else {
             NSLog("OneFiler: Domain \(domain.identifier.rawValue) not found in domains.json")
+            await debugLogger.error("Domain \(domain.identifier.rawValue) not found in domains.json")
             throw NSFileProviderError(.serverUnreachable)
         }
 
         NSLog("OneFiler: Found registered instance path: \(domainConfig.path)")
+        await debugLogger.info("Found registered instance path: \(domainConfig.path)")
         if domainConfig.email != nil {
             NSLog("OneFiler: Found credentials in config")
+            await debugLogger.debug("Found credentials in config")
         }
 
         let config = ONEInstanceConfig(
@@ -62,9 +90,13 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
             instanceName: domainConfig.name
         )
 
+        await debugLogger.info("Creating ONEBridge...")
         let bridge = try ONEBridge(config: config)
+        await debugLogger.info("Connecting ONEBridge...")
         try await bridge.connect()
         NSLog("OneFiler: Connected to ONE instance at \(domainConfig.path)")
+        await debugLogger.info("Connected to ONE instance at \(domainConfig.path)")
+        await debugLogger.info("=== Setup Bridge Completed ===")
         return bridge
     }
 
@@ -111,10 +143,12 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
     }
     
     // MARK: - Invalidation
-    
+
     func invalidate() {
         Task {
+            await debugLogger.info("=== Extension Invalidate Called ===")
             await bridge?.disconnect()
+            await debugLogger.info("=== Extension Invalidate Completed ===")
         }
     }
     
@@ -131,14 +165,19 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         Task {
             do {
                 logger.info("🔌 Getting bridge...")
+                await debugLogger.info("item(for:): Getting bridge for \(identifier.rawValue)")
                 let bridge = try await getBridge()
                 logger.info("🔍 Fetching item...")
+                await debugLogger.info("item(for:): Fetching item for \(identifier.rawValue)")
                 let item = try await fetchItem(for: identifier, using: bridge)
                 logger.info("✅ Item fetched successfully")
+                await debugLogger.info("item(for:): Item fetched successfully for \(identifier.rawValue)")
                 completionHandler(item, nil)
                 progress.completedUnitCount = 1
             } catch {
                 logger.error("❌ ITEM FETCH FAILED: \(error.localizedDescription)")
+                NSLog("🔥🔥🔥 ITEM FETCH ERROR: \(error)")
+                await debugLogger.error("Item fetch failed for \(identifier.rawValue): \(error)")
                 completionHandler(nil, error)
             }
         }
@@ -152,8 +191,19 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
             return FileProviderItem.rootItem()
         }
 
+        // Reject system identifiers we don't support
+        if identifier == .trashContainer {
+            logger.info("Rejecting trash container request - not supported")
+            throw NSFileProviderError(.noSuchItem)
+        }
+
+        if identifier == .workingSet {
+            logger.info("Rejecting working set request - not supported")
+            throw NSFileProviderError(.noSuchItem)
+        }
+
         // Handle synthetic top-level folders (don't go to Node.js for these)
-        let syntheticFolders = ["objects", "chats", "types", "debug", "invites"]
+        let syntheticFolders = ["chats", "debug", "invites", "objects", "profiles", "questionnaires", "types"]
         if syntheticFolders.contains(identifier.rawValue) {
             if let folder = FileProviderItem.standardFolders().first(where: { $0.itemIdentifier == identifier }) {
                 return folder
@@ -174,13 +224,18 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         request: NSFileProviderRequest,
         completionHandler: @escaping (URL?, NSFileProviderItem?, Error?) -> Void
     ) -> Progress {
+        logger.info("📥 FETCH CONTENTS: item=\(itemIdentifier.rawValue)")
+        NSLog("🔥🔥🔥 FETCH CONTENTS CALLED: \(itemIdentifier.rawValue)")
+
         let progress = Progress(totalUnitCount: 100)
 
         Task {
             do {
+                await debugLogger.info("fetchContents: Getting bridge...")
                 let bridge = try await getBridge()
 
                 // Get object metadata
+                await debugLogger.info("fetchContents: Getting object metadata for \(itemIdentifier.rawValue)")
                 let object = try await bridge.getObject(id: itemIdentifier.rawValue)
 
                 // Create temporary file
@@ -188,16 +243,27 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
                 let tempURL = tempDir.appendingPathComponent(UUID().uuidString)
                     .appendingPathExtension(object.fileExtension ?? "dat")
 
+                await debugLogger.info("fetchContents: Created temp file at \(tempURL.path)")
+
                 // Read content from ONE database
+                await debugLogger.info("fetchContents: Reading content...")
                 let content = try await bridge.readContent(id: object.id)
+                await debugLogger.info("fetchContents: Got \(content.count) bytes")
+
                 try content.write(to: tempURL)
+                await debugLogger.info("fetchContents: Wrote to temp file")
 
                 // Return file and updated item
                 let item = FileProviderItem(oneObject: object)
+                logger.info("📥 FETCH CONTENTS SUCCESS: \(tempURL.path)")
+                NSLog("🔥🔥🔥 FETCH CONTENTS SUCCESS: \(tempURL.path)")
                 completionHandler(tempURL, item, nil)
                 progress.completedUnitCount = 100
 
             } catch {
+                logger.error("📥 FETCH CONTENTS FAILED: \(error.localizedDescription)")
+                NSLog("🔥🔥🔥 FETCH CONTENTS ERROR: \(error)")
+                await debugLogger.error("fetchContents failed: \(error)")
                 completionHandler(nil, nil, error)
             }
         }
@@ -245,6 +311,14 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 
         case let id where id.rawValue == "debug" || id.rawValue.hasPrefix("debug/"):
             NSLog("🔥🔥🔥 ENUMERATOR TYPE: GenericEnumerator(debug) for \(id.rawValue)")
+            return GenericEnumerator(extension: self, containerIdentifier: containerItemIdentifier)
+
+        case let id where id.rawValue == "profiles" || id.rawValue.hasPrefix("profiles/"):
+            NSLog("🔥🔥🔥 ENUMERATOR TYPE: GenericEnumerator(profiles) for \(id.rawValue)")
+            return GenericEnumerator(extension: self, containerIdentifier: containerItemIdentifier)
+
+        case let id where id.rawValue == "questionnaires" || id.rawValue.hasPrefix("questionnaires/"):
+            NSLog("🔥🔥🔥 ENUMERATOR TYPE: GenericEnumerator(questionnaires) for \(id.rawValue)")
             return GenericEnumerator(extension: self, containerIdentifier: containerItemIdentifier)
 
         default:

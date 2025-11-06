@@ -59,9 +59,10 @@ xcodebuild -project OneFiler.xcodeproj -scheme OneFilerHost -configuration Debug
 
 **Xcode pre-build scripts automatically:**
 - Build TypeScript IPC server (`npm run build`)
-- Build CLI tool via SPM (`swift build --product onefiler`)
+- Extract vendored dependencies (`npm run vendor:install`)
 - Copy CLI into app bundle (`Contents/MacOS/onefiler`)
-- Bundle node-runtime/lib into extension resources
+- Bundle Node.js binary and ICU libraries
+- Copy node-runtime/lib and node_modules into extension resources
 
 **Result**: Complete `OneFiler.app` at `.build/debug/OneFiler.app` (Debug) or derived data (Xcode).
 
@@ -120,7 +121,8 @@ swift build
 
 **TypeScript must be built before Swift:**
 1. `npm run build` compiles `node-runtime/index.ts` → `node-runtime/lib/index.js`
-2. `swift build` or Xcode embeds `node-runtime/lib/` as resource in extension
+2. Vendored dependencies must be extracted: `cd node-runtime && npm run vendor:install`
+3. `swift build` or Xcode embeds `node-runtime/lib/` and `node-runtime/node_modules/` as resources in extension
 
 If you build Swift/Xcode first, the extension will bundle outdated or missing IPC server code.
 
@@ -159,6 +161,7 @@ Use the combined script for most development:
 This script:
 - Regenerates Xcode project from `project.yml`
 - Builds TypeScript IPC server
+- Extracts vendored dependencies
 - Bundles Node.js with ICU libraries
 - Builds via Xcode
 - Installs to /Applications with proper permissions
@@ -263,7 +266,7 @@ Node.js Application Server
 ```bash
 # HTTP REST API (optional - disabled by default)
 ONE_PROVIDER_HTTP_PORT=3000                  # Enable HTTP server on this port
-ONE_PROVIDER_INVITE_URL_PREFIX=https://one.local/invite  # Invite URL prefix (optional)
+ONE_PROVIDER_INVITE_URL_PREFIX=https://lama.one/invite  # Invite URL prefix (optional)
 
 # CommServer and networking
 REFINIO_COMM_SERVER_URL=wss://comm.example.com  # Override CommServer URL (optional)
@@ -317,7 +320,7 @@ OneFiler.app/
 │   │       │   │   │   └── node           # Bundled Node.js (57MB)
 │   │       │   │   ├── dylibs/            # ICU libraries (13 files)
 │   │       │   │   ├── lib/               # Node.js app server (from node-runtime/lib)
-│   │       │   │   └── node_modules/      # one.core + one.models
+│   │       │   │   └── node_modules/      # one.core + one.models (from node-runtime/node_modules)
 │   │       │   └── Info.plist
 │   │       └── ...
 │   └── Info.plist
@@ -463,7 +466,7 @@ Creates an IOP (Instance-to-Instance Pairing) invitation for connecting with ano
 **Response:**
 ```json
 {
-  "inviteUrl": "https://one.local/invite#%7B...encoded-invite-data...%7D"
+  "inviteUrl": "https://lama.one/invite#%7B...encoded-invite-data...%7D"
 }
 ```
 
@@ -473,7 +476,7 @@ POST /api/connections/invite
 Content-Type: application/json
 
 {
-  "inviteUrl": "https://one.local/invite#%7B...%7D"
+  "inviteUrl": "https://lama.one/invite#%7B...%7D"
 }
 ```
 Accepts an invitation and establishes a connection with the remote instance.
@@ -533,7 +536,7 @@ curl -X POST http://localhost:3000/api/connections/create-invite
 # Accept invitation
 curl -X POST http://localhost:3000/api/connections/invite \
   -H "Content-Type: application/json" \
-  -d '{"inviteUrl": "https://one.local/invite#..."}'
+  -d '{"inviteUrl": "https://lama.one/invite#..."}'
 
 # List connections
 curl http://localhost:3000/api/connections
@@ -938,28 +941,59 @@ Configured in `project.yml` and `Resources/*.entitlements`:
 
 ## Vendored Dependencies
 
-The `packages/` directory contains extracted one.core and one.models dependencies:
-- `packages/one.core/`
-- `packages/one.models/`
+Dependencies exist in multiple locations for different purposes:
+
+1. **Root directories** (`one.core/`, `one.models/`): Local development copies
+2. **packages/** directory (`packages/one.core/`, `packages/one.models/`): For TypeScript path resolution (tsconfig.json paths)
+3. **vendor/** directory: Tarballs for reproducible builds
+   - `vendor/refinio-one.core-*.tgz`
+   - `vendor/refinio-one.models-*.tgz`
+4. **node-runtime/node_modules/@refinio/**: Extracted from vendor tarballs via `npm run vendor:install`
+5. **Extension Resources/node_modules/**: Copied from node-runtime during Xcode build
 
 **Why vendored?**
 - File Provider extension runs in sandbox without access to npm registry
 - Ensures reproducible builds with locked versions
 - Reduces build complexity (no npm install in sandboxed environment)
+- TypeScript compilation uses `packages/` via path mappings in tsconfig.json
 
-**Updating vendored dependencies:**
+### Updating Vendored Dependencies
 
-```bash
-# Update packages/ with latest one.core and one.models
-cd node-runtime
-npm install  # or npm update
+To update one.core or one.models versions:
 
-# Rebuild
-cd ..
-npm run build
-```
+1. **Build updated packages** in their respective directories:
+   ```bash
+   cd ../one.core && npm run build && npm pack
+   cd ../one.models && npm run build && npm pack
+   ```
 
-The build process copies `node-runtime/node_modules/@refinio/` to the extension bundle as `Resources/node_modules/`.
+2. **Copy tarballs to vendor/**:
+   ```bash
+   cp ../one.core/refinio-one.core-*.tgz vendor/
+   cp ../one.models/refinio-one.models-*.tgz vendor/
+   ```
+
+3. **Update local copies** (if using root-level directories for development):
+   ```bash
+   # Option A: Copy from parent directory
+   rsync -av --delete ../one.core/ one.core/
+   rsync -av --delete ../one.models/ one.models/
+
+   # Option B: Symlink packages/ to root directories
+   ln -sf ../one.core packages/one.core
+   ln -sf ../one.models packages/one.models
+   ```
+
+4. **Update version in node-runtime/package.json** to match tarball versions
+
+5. **Clean and reinstall**:
+   ```bash
+   cd node-runtime
+   rm -rf node_modules
+   npm run vendor:install
+   cd ..
+   ./scripts/rebuild-and-install.sh
+   ```
 
 ## Project Structure
 
@@ -982,10 +1016,20 @@ one.provider/
 │   └── Extension.entitlements             # Extension entitlements
 ├── node-runtime/                      # Node.js application server
 │   ├── index.ts                           # IPC bridge + ONE backend
-│   └── lib/                               # Compiled output (bundled in extension)
-├── packages/                          # Vendored dependencies
-│   ├── one.core/
-│   └── one.models/
+│   ├── lib/                               # Compiled output (bundled in extension)
+│   └── node_modules/                      # Extracted from vendor/ tarballs
+│       └── @refinio/
+│           ├── one.core/
+│           └── one.models/
+├── one.core/                          # ONE core library (local copy)
+├── one.models/                        # ONE models library (local copy)
+├── packages/                          # Package dependencies
+│   ├── one.core/                          # Symlink or copy for TypeScript paths
+│   ├── one.models/                        # Symlink or copy for TypeScript paths
+│   └── connection.core/                   # Connection utilities
+├── vendor/                            # Vendored dependency tarballs
+│   ├── refinio-one.core-*.tgz
+│   └── refinio-one.models-*.tgz
 ├── test/
 │   ├── ipc-bridge-test.js                 # IPC communication test
 │   └── integration/

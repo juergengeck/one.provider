@@ -41,61 +41,17 @@ class RootEnumerator: NSObject, NSFileProviderEnumerator {
         for observer: NSFileProviderChangeObserver,
         from anchor: NSFileProviderSyncAnchor
     ) {
-        Task {
-            do {
-                guard let ext = self.fileProviderExtension else {
-                    throw NSFileProviderError(.serverUnreachable)
-                }
-                let bridge = try await ext.getBridge()
-
-                // Get changes from ONE database
-                let anchorData = anchor.rawValue
-                let changes = try await bridge.getChanges(since: anchorData)
-
-                // Convert to File Provider items, but ONLY for root-level items
-                // Filter out items that belong to subdirectories (they'll be reported by their own enumerators)
-                let rootLevelUpdates = changes.updated.filter { obj in
-                    obj.parentId == nil ||
-                    obj.parentId == NSFileProviderItemIdentifier.rootContainer.rawValue ||
-                    obj.parentId == "/"
-                }
-                let updatedItems = rootLevelUpdates.map { FileProviderItem(oneObject: $0) }
-
-                // Only delete items that were actually in root
-                let deletedIdentifiers = changes.deleted.map { NSFileProviderItemIdentifier($0) }
-
-                // Report changes
-                if !updatedItems.isEmpty {
-                    observer.didUpdate(updatedItems)
-                }
-
-                if !deletedIdentifiers.isEmpty {
-                    observer.didDeleteItems(withIdentifiers: deletedIdentifiers)
-                }
-
-                // Update anchor
-                let newAnchor = NSFileProviderSyncAnchor(changes.newAnchor)
-                observer.finishEnumeratingChanges(upTo: newAnchor, moreComing: false)
-
-            } catch {
-                observer.finishEnumeratingWithError(error)
-            }
-        }
+        // Root-level synthetic folders never change
+        // Report no changes and use the same anchor
+        logger.info("🔄 ROOT ENUMERATE CHANGES (no changes - synthetic folders)")
+        observer.finishEnumeratingChanges(upTo: anchor, moreComing: false)
     }
 
     func currentSyncAnchor(completionHandler: @escaping (NSFileProviderSyncAnchor?) -> Void) {
-        Task {
-            do {
-                guard let ext = self.fileProviderExtension else {
-                    throw NSFileProviderError(.serverUnreachable)
-                }
-                let bridge = try await ext.getBridge()
-                let anchor = try await bridge.getCurrentAnchor()
-                completionHandler(NSFileProviderSyncAnchor(anchor))
-            } catch {
-                completionHandler(nil)
-            }
-        }
+        // Root-level synthetic folders never change, return fixed anchor
+        logger.info("📍 ROOT CURRENT SYNC ANCHOR (fixed)")
+        let fixedAnchor = NSFileProviderSyncAnchor("root-v1".data(using: .utf8)!)
+        completionHandler(fixedAnchor)
     }
 }
 
