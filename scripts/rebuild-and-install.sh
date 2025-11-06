@@ -18,7 +18,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 DOMAIN_NAME="${1:-ONE-Test}"
 # Use App Group container (extension has sandbox access)
-APP_GROUP_CONTAINER="$HOME/Library/Group Containers/group.com.one.filer"
+APP_GROUP_CONTAINER="$HOME/Library/Group Containers/group.one.filer"
 INSTANCE_PATH="${2:-$APP_GROUP_CONTAINER/instances/$DOMAIN_NAME}"
 
 # Create instance directory if it doesn't exist
@@ -117,4 +117,4 @@ echo "🔍 To test, run:"
 echo "   ls ~/Library/CloudStorage/OneFiler-$DOMAIN_NAME/"
 echo ""
 echo "📊 To watch logs:"
-echo "   log stream --predicate 'subsystem == \"com.one.provider\"' --level debug"
+echo "   log stream --predicate 'subsystem == \"one.filer\"' --level debug"
