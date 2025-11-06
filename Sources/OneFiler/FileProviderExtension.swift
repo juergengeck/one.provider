@@ -12,6 +12,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
     private let bridgeLock = NSLock()
     private let logger = Logger(subsystem: "com.one.provider", category: "Extension")
     private let debugLogger: DebugLogger
+    private let statusWriter = StatusWriter()
 
     required init(domain: NSFileProviderDomain) {
         logger.info("🚀 EXTENSION INIT: domain=\(domain.displayName)")
@@ -32,6 +33,12 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
             await debugLogger.info("=== Extension Initialized ===")
             await debugLogger.info("Domain: \(domain.displayName)")
             await debugLogger.info("Domain identifier: \(domain.identifier.rawValue)")
+
+            // Write initial status
+            await statusWriter.updateStatus(
+                domain: domain.identifier.rawValue,
+                state: "disconnected"
+            )
         }
 
         logger.info("✅ EXTENSION INIT COMPLETE")
@@ -97,6 +104,13 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         NSLog("OneFiler: Connected to ONE instance at \(domainConfig.path)")
         await debugLogger.info("Connected to ONE instance at \(domainConfig.path)")
         await debugLogger.info("=== Setup Bridge Completed ===")
+
+        // Update status to connected
+        await statusWriter.updateStatus(
+            domain: domain.identifier.rawValue,
+            state: "connected"
+        )
+
         return bridge
     }
 
@@ -147,6 +161,13 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
     func invalidate() {
         Task {
             await debugLogger.info("=== Extension Invalidate Called ===")
+
+            // Update status to disconnected
+            await statusWriter.updateStatus(
+                domain: domain.identifier.rawValue,
+                state: "disconnected"
+            )
+
             await bridge?.disconnect()
             await debugLogger.info("=== Extension Invalidate Completed ===")
         }
