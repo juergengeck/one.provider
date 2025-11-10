@@ -323,7 +323,7 @@ class IPCBridge {
 
         const chatFileSystem = new ChatFileSystem(leuteModel, topicModel, channelManager, notifications, '/objects');
         const debugFileSystem = new DebugFileSystem(leuteModel, topicModel, connectionsModel, channelManager);
-        const inviteUrlPrefix = process.env.ONE_PROVIDER_INVITE_URL_PREFIX || 'https://one.local/invite';
+        const inviteUrlPrefix = process.env.ONE_PROVIDER_INVITE_URL_PREFIX || 'https://lama.one/invite';
         const pairingFileSystem = new PairingFileSystem(connectionsModel, iomManager, inviteUrlPrefix, 'full');
         const objectsFileSystem = new ObjectsFileSystem();
         const typesFileSystem = new TypesFileSystem();
@@ -349,7 +349,7 @@ class IPCBridge {
         const httpPort = process.env.ONE_PROVIDER_HTTP_PORT;
         if (httpPort) {
             console.error('[IPC] HTTP REST API enabled on port', httpPort);
-            const inviteUrlPrefix = process.env.ONE_PROVIDER_INVITE_URL_PREFIX || 'https://one.local/invite';
+            const inviteUrlPrefix = process.env.ONE_PROVIDER_INVITE_URL_PREFIX || 'https://lama.one/invite';
             const connectionHandler = new ConnectionHandler(leuteModel, connectionsModel, inviteUrlPrefix);
             this.httpServer = new HttpRestServer(connectionHandler, leuteModel, parseInt(httpPort, 10));
 
